@@ -17,17 +17,24 @@ namespace Rabbit.Queues.Producer
             using (var connection = factory.CreateConnection())
             using (var channel = connection.CreateModel())
             {
-                channel.QueueDeclare(queue: queueName,
-                                     durable: false,
-                                     exclusive: false,
-                                     autoDelete: false,
-                                     arguments: null);
+               
+                channel.QueueDeclare(queue: "task_queue",
+                     durable: true,
+                     exclusive: false,
+                     autoDelete: false,
+                     arguments: null);
 
                 var body = Encoding.UTF8.GetBytes(message);
+                
+                //Marking messages as persistent doesn't fully guarantee that a message won't be lost
+                //Although save to disk where massage accepted but not saved yet
+                //for betehre ensurence use publisher confirm
+                var properties = channel.CreateBasicProperties();
+                properties.Persistent = true;
 
                 channel.BasicPublish(exchange: "",
-                                     routingKey: queueName,
-                                     basicProperties: null,
+                                     routingKey: "task_queue",
+                                     basicProperties: properties,
                                      body: body);
                 Console.WriteLine(" [x] Sent {0}", message);
             }

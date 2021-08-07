@@ -1,13 +1,54 @@
-﻿namespace Rabbit.Queues.Consumers
+﻿using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System;
+using System.Text;
+using System.Threading;
+
+namespace Rabbit.Queues.Consumers
 {
     class Program
     {
         private const string HOST_NAME = "localhost";
-        private const string QUEUE_NAME = "hello";
+        private const string QUEUE_NAME = "task_queue";
         public static void Main()
         {
-            var consumer = new Consumer(HOST_NAME);
-            consumer.StartListeningOnQueue(QUEUE_NAME);
+            var factory = new ConnectionFactory() { HostName = "localhost" };
+            using (var connection = factory.CreateConnection())
+            using (var channel = connection.CreateModel())
+            {
+                channel.QueueDeclare(queue: "task_queue",
+                                     durable: true,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: null);
+                //this distributes messages evenly
+                channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
+
+                Console.WriteLine(" [*] Waiting for messages.");
+
+                var consumer = new EventingBasicConsumer(channel);
+                consumer.Received += (sender, ea) =>
+                {
+                    var body = ea.Body.ToArray();
+                    var message = Encoding.UTF8.GetString(body);
+                    Console.WriteLine(" [x] Received {0}", message);
+
+                    int dots = message.Split('.').Length - 1;
+                    Thread.Sleep(dots * 1000);
+
+                    Console.WriteLine(" [x] Done");
+
+                    // Note: it is possible to access the channel via
+                    //       ((EventingBasicConsumer)sender).Model here
+                    channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                };
+                channel.BasicConsume(queue: "task_queue",
+                                     autoAck: false,
+                                     consumer: consumer);
+
+                Console.WriteLine(" Press [enter] to exit.");
+                Console.ReadLine();
+            }
         }
     }
 }
